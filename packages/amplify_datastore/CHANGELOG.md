@@ -1,3 +1,22 @@
+## 2.3.0
+
+- Minor bug fixes and improvements
+
+## 2.2.1
+
+### Fixes
+- fix(datastore): prevent auth plugin from throwing during configuration ([#5132](https://github.com/aws-amplify/amplify-flutter/pull/5132))
+
+## 2.2.0
+
+### Features
+- feat: Support Amplify Gen 2 outputs ([#5073](https://github.com/aws-amplify/amplify-flutter/pull/5073))
+
+## 2.1.0
+
+### Features
+- feat(datastore): Migrate to Amplify Swift V2 ([#4962](https://github.com/aws-amplify/amplify-flutter/pull/4962))
+
 ## 2.0.0
 
 We are thrilled to release version 2.0 of the Amplify Flutter libraries to add support for Amplify Gen 2. Learn more about Amplify Gen 2 at [https://docs.amplify.aws](https://docs.amplify.aws).

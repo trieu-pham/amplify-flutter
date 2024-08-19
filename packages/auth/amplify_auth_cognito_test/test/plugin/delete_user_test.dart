@@ -20,11 +20,11 @@ import 'package:amplify_secure_storage_dart/amplify_secure_storage_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
-  final authConfig = AuthConfiguration.fromConfig(mockConfig.auth!.awsPlugin!);
+  final authConfig = AuthConfiguration.fromAmplifyOutputs(mockConfig);
   final userPoolConfig = authConfig.userPoolConfig!;
   final identityPoolConfig = authConfig.identityPoolConfig!;
-  final userPoolKeys = CognitoUserPoolKeys(userPoolConfig);
-  final identityPoolKeys = CognitoIdentityPoolKeys(identityPoolConfig);
+  final userPoolKeys = CognitoUserPoolKeys(userPoolConfig.appClientId);
+  final identityPoolKeys = CognitoIdentityPoolKeys(identityPoolConfig.poolId);
 
   late AmplifyAuthCognitoDart plugin;
   late CognitoAuthStateMachine stateMachine;

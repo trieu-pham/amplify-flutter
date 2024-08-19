@@ -50,7 +50,7 @@ class AmplifyDataStore extends DataStorePluginInterface
 
   @override
   Future<void> configure({
-    AmplifyConfig? config,
+    AmplifyOutputs? config,
     required AmplifyAuthProviderRepository authProviderRepo,
   }) async {
     if (config == null) {
@@ -100,17 +100,15 @@ class AmplifyDataStore extends DataStorePluginInterface
     }
 
     final apiPlugin = Amplify.API.plugins.firstOrNull;
-    final gqlConfig = config.api?.awsPlugin?.all.values.firstWhereOrNull(
-      (config) => config.endpointType == EndpointType.graphQL,
-    );
+    final gqlConfig = config.data;
     if (apiPlugin != null && gqlConfig != null) {
       // ignore: invalid_use_of_protected_member
       final authProviders = apiPlugin.authProviders;
       Map<String, String> endpoints = {};
-      config.api?.awsPlugin?.all.entries.forEach((e) {
-        endpoints[e.key] = e.value.authorizationType.name;
+      gqlConfig.entries.forEach((e) {
+        endpoints[e.key] = e.value.defaultAuthorizationType.name;
       });
-      final nativePlugin = _NativeAmplifyApi(authProviders);
+      final nativePlugin = NativeAmplifyApi(authProviders);
       NativeApiPlugin.setup(nativePlugin);
 
       final nativeBridge = NativeApiBridge();
@@ -292,10 +290,11 @@ class _NativeAmplifyAuthCognito
   String get runtimeTypeName => '_NativeAmplifyAuthCognito';
 }
 
-class _NativeAmplifyApi
+@visibleForTesting
+class NativeAmplifyApi
     with AWSDebuggable, AmplifyLoggerMixin
     implements NativeApiPlugin {
-  _NativeAmplifyApi(this._authProviders);
+  NativeAmplifyApi(this._authProviders);
 
   /// The registered [APIAuthProvider] instances.
   final Map<APIAuthorizationType<AmplifyAuthProvider>, APIAuthProvider>
@@ -305,7 +304,7 @@ class _NativeAmplifyApi
       _subscriptionsCache = {};
 
   @override
-  String get runtimeTypeName => '_NativeAmplifyApi';
+  String get runtimeTypeName => 'NativeAmplifyApi';
 
   @override
   Future<String?> getLatestAuthToken(String providerName) {
@@ -351,7 +350,9 @@ class _NativeAmplifyApi
   Future<NativeGraphQLSubscriptionResponse> subscribe(
       NativeGraphQLRequest request) async {
     final flutterRequest = nativeRequestToGraphQLRequest(request);
-
+    // Turn off then default reconnection behavior to allow native side to trigger reconnect
+    // ignore: invalid_use_of_internal_member
+    WebSocketOptions.autoReconnect = false;
     final operation = Amplify.API.subscribe(flutterRequest,
         onEstablished: () => sendNativeStartAckEvent(flutterRequest.id));
 
@@ -375,5 +376,37 @@ class _NativeAmplifyApi
       await subscription.cancel();
       _subscriptionsCache.remove(subscriptionId);
     }
+  }
+
+  @override
+  Future<void> deviceOffline() async {
+    await _notifySubscriptionsDisconnected();
+  }
+
+  Future<void> _notifySubscriptionsDisconnected() async {
+    _subscriptionsCache.forEach((subId, stream) async {
+      // Send Swift subscriptions an expected error message when network is lost.
+      // Swift side is expecting this string to transform into the correct error type.
+      // This will cause the Sync Engine to enter retry mode and in order to recover it
+      // later we must unsubscribe and close the websocket.
+      GraphQLResponseError error = GraphQLResponseError(
+        message: 'FlutterNetworkException - Network disconnected',
+      );
+      sendSubscriptionStreamErrorEvent(subId, error.toJson());
+      // Note: the websocket will still be closing after this line.
+      // There may be a small delay in shutdown.
+      await unsubscribe(subId);
+      await stream.cancel();
+    });
+  }
+
+  /// Amplify.DataStore.Stop() callback
+  ///
+  /// Clean up subscriptions on stop.
+  @override
+  Future<void> onStop() async {
+    _subscriptionsCache.forEach((subId, _) async {
+      await unsubscribe(subId);
+    });
   }
 }
